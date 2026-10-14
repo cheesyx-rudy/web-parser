@@ -6,5 +6,33 @@
     "max_body_bytes": 8388608,
     "user_agent": "Happ/3.0.0"
   },
-  "sources": []
+  "sources": [
+    {
+      "name": "gidroksi.fun",
+      "url": "https://gidroksi.fun/dhdgshsgdhdh/VFG",
+      "mode": "direct",
+      "user_agent": "Happ/3.0.0",
+      "headers": {},
+      "timeout_seconds": 30,
+      "retries": 2
+    },
+    {
+      "name": "p.kfwl.lol",
+      "url": "https://p.kfwl.lol/https://alterservice.info/sub-p/tRxzVN3gU2m6uvbsT1JSaD0nA0EpXHtoamANgpkjCMs",
+      "mode": "direct",
+      "user_agent": "Happ/3.0.0",
+      "headers": {},
+      "timeout_seconds": 30,
+      "retries": 2
+    },
+    {
+      "name": "quorteam.vspboost.ru",
+      "url": "https://quorteam.vspboost.ru/get/0c76ec66-be3c-45ea-a931-0d57deb44658",
+      "mode": "direct",
+      "user_agent": "Happ/3.0.0",
+      "headers": {},
+      "timeout_seconds": 30,
+      "retries": 2
+    }
+  ]
 }
