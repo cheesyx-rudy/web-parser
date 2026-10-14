@@ -1,2 +1,2 @@
-# One direct subscription/API URL per line.
-# For per-source User-Agent, headers, HWID, or p.kfwl.lol settings, configure sources.json instead.
+# One web-subscription URL per line. This file is the source of truth.
+# Add a URL here to enable it; remove the line to remove it from sources.json too.

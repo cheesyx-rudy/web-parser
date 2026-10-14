@@ -50,58 +50,115 @@ def safe_host(url: str) -> str:
         return "unknown-host"
 
 
+def read_source_urls() -> list[str]:
+    """Read the source-of-truth list from sources.txt, preserving order and removing duplicates."""
+    if not SOURCES_TXT.exists():
+        raise FileNotFoundError(
+            "sources.txt is missing. It is the source of truth; restore it before running the parser."
+        )
+
+    urls: list[str] = []
+    seen: set[str] = set()
+    for line_number, line in enumerate(SOURCES_TXT.read_text(encoding="utf-8").splitlines(), 1):
+        value = line.strip()
+        if not value or value.startswith("#"):
+            continue
+        parsed = urlparse(value)
+        if parsed.scheme not in {"http", "https"} or not parsed.hostname:
+            print(f"[WARN] sources.txt:{line_number}: not a valid HTTP(S) URL; skipped")
+            continue
+        if value not in seen:
+            seen.add(value)
+            urls.append(value)
+        else:
+            print(f"[WARN] sources.txt:{line_number}: duplicate URL; skipped")
+    return urls
+
+
+def sync_json_sources(urls: list[str], defaults: dict[str, Any]) -> list[dict[str, Any]]:
+    """Synchronize sources.json entries from sources.txt, preserving options for URLs that remain."""
+    data: dict[str, Any] = {"defaults": defaults, "sources": []}
+    if CONFIG_PATH.exists():
+        try:
+            loaded = json.loads(CONFIG_PATH.read_text(encoding="utf-8"))
+            if isinstance(loaded, dict):
+                data.update(loaded)
+        except (OSError, json.JSONDecodeError) as exc:
+            raise ValueError(f"Cannot read {CONFIG_PATH.name}: {exc}") from exc
+
+    existing: dict[str, dict[str, Any]] = {}
+    for item in data.get("sources", []):
+        if isinstance(item, dict) and isinstance(item.get("url"), str):
+            existing[item["url"].strip()] = item
+
+    synced: list[dict[str, Any]] = []
+    for index, url in enumerate(urls, 1):
+        item = existing.get(url)
+        if item is None:
+            host = urlparse(url).hostname or f"source-{index}"
+            item = {
+                "name": host,
+                "url": url,
+                "mode": "direct",
+                "user_agent": str(defaults.get("user_agent", DEFAULT_UA)),
+                "headers": {},
+                "timeout_seconds": int(defaults.get("timeout_seconds", 30)),
+                "retries": int(defaults.get("retries", 2)),
+            }
+            print(f"[INFO] Added new source to sources.json: {host}")
+        synced.append(item)
+
+    # Sources not present in sources.txt are intentionally removed from the JSON list.
+    if data.get("sources", []) != synced:
+        data["sources"] = synced
+        CONFIG_PATH.write_text(json.dumps(data, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+        print(f"[INFO] Synced sources.json with sources.txt ({len(synced)} sources)")
+
+    return synced
+
+
 def load_sources() -> tuple[list[Source], dict[str, Any]]:
     defaults: dict[str, Any] = {
         "timeout_seconds": 30,
         "retries": 2,
-        "user_agent": DEFAULT_UA,
+        "user_agent": "Happ/3.0.0",
         "max_body_bytes": MAX_BODY_BYTES,
+        "decode_base64": True,
     }
-    sources: list[Source] = []
 
     if CONFIG_PATH.exists():
         try:
             data = json.loads(CONFIG_PATH.read_text(encoding="utf-8"))
-            defaults.update(data.get("defaults", {}))
-            for i, raw in enumerate(data.get("sources", []), 1):
-                if not isinstance(raw, dict):
-                    print(f"[WARN] sources.json: source #{i} is not an object; skipped")
-                    continue
-                url = str(raw.get("url", "")).strip()
-                if not url or url.startswith("https://example.com/"):
-                    continue
-                name = str(raw.get("name") or f"source-{i}").strip()
-                mode = str(raw.get("mode", "direct")).strip().lower()
-                if mode not in {"direct", "p_kfwl"}:
-                    print(f"[WARN] {name}: unsupported mode {mode!r}; skipped")
-                    continue
-                sources.append(Source(
-                    name=name,
-                    url=url,
-                    mode=mode,
-                    user_agent=raw.get("user_agent"),
-                    os_name=str(raw.get("os", "android")),
-                    hwid=raw.get("hwid"),
-                    headers=raw.get("headers") if isinstance(raw.get("headers"), dict) else {},
-                    timeout_seconds=int(raw.get("timeout_seconds", defaults["timeout_seconds"])),
-                    retries=int(raw.get("retries", defaults["retries"])),
-                    proxy_base=str(raw.get("proxy_base", "https://p.kfwl.lol")).rstrip("/"),
-                ))
-        except (OSError, json.JSONDecodeError, TypeError, ValueError) as exc:
-            print(f"[ERROR] Cannot read sources.json: {exc}")
-            raise
+            if isinstance(data, dict) and isinstance(data.get("defaults"), dict):
+                defaults.update(data["defaults"])
+        except (OSError, json.JSONDecodeError) as exc:
+            raise ValueError(f"Cannot read {CONFIG_PATH.name}: {exc}") from exc
 
-    # Simple sources.txt is useful for direct raw/API subscription URLs.
-    if not sources and SOURCES_TXT.exists():
-        for i, line in enumerate(SOURCES_TXT.read_text(encoding="utf-8").splitlines(), 1):
-            value = line.strip()
-            if not value or value.startswith("#"):
-                continue
-            sources.append(Source(
-                name=f"source-{i}", url=value, mode="direct",
-                user_agent=str(defaults.get("user_agent", DEFAULT_UA)),
-                timeout_seconds=int(defaults["timeout_seconds"]), retries=int(defaults["retries"]),
-            ))
+    urls = read_source_urls()
+    json_sources = sync_json_sources(urls, defaults)
+    sources: list[Source] = []
+
+    for index, raw in enumerate(json_sources, 1):
+        url = str(raw.get("url", "")).strip()
+        if not url:
+            continue
+        mode = str(raw.get("mode", "direct")).strip().lower()
+        if mode not in {"direct", "p_kfwl"}:
+            print(f"[WARN] {raw.get('name', f'source-{index}')}: unsupported mode {mode!r}; skipped")
+            continue
+        sources.append(Source(
+            name=str(raw.get("name") or f"source-{index}").strip(),
+            url=url,
+            mode=mode,
+            user_agent=raw.get("user_agent"),
+            os_name=str(raw.get("os", "android")),
+            hwid=raw.get("hwid"),
+            headers=raw.get("headers") if isinstance(raw.get("headers"), dict) else {},
+            timeout_seconds=int(raw.get("timeout_seconds", defaults["timeout_seconds"])),
+            retries=int(raw.get("retries", defaults["retries"])),
+            proxy_base=str(raw.get("proxy_base", "https://p.kfwl.lol")).rstrip("/"),
+        ))
+
     return sources, defaults
 
 

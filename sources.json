@@ -4,17 +4,7 @@
     "retries": 2,
     "decode_base64": true,
     "max_body_bytes": 8388608,
-    "user_agent": "Mozilla/5.0 (compatible; LIKVID-Web-Parser/1.0; +https://github.com/cheesyx-rudy/web-parser)"
+    "user_agent": "Happ/3.0.0"
   },
-  "sources": [
-    {
-      "name": "example-web-subscription",
-      "url": "https://gidroksi.fun/dhdgshsgdhdh/VFG",
-      "mode": "direct",
-      "user_agent": "Happ/3.0.0",
-      "headers": {},
-      "timeout_seconds": 30,
-      "retries": 2
-    }
-  ]
+  "sources": []
 }
