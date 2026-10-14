@@ -10,17 +10,8 @@
   },
   "sources": [
     {
-      "name": "gidroksi.fun",
-      "url": "https://gidroksi.fun/svagoff_unofficial/SwagVpn",
-      "mode": "direct",
-      "user_agent": "Happ/3.0.0",
-      "headers": {},
-      "timeout_seconds": 30,
-      "retries": 2
-    },
-    {
-      "name": "gidroksi.fun",
-      "url": "https://gidroksi.fun/dhdgshsgdhdh/VFG",
+      "name": "my-project-w2z7.onrender.com",
+      "url": "https://my-project-w2z7.onrender.com/sub/pfSlu3Bhq5E3igUI?key=key02",
       "mode": "direct",
       "user_agent": "Happ/3.0.0",
       "headers": {},
