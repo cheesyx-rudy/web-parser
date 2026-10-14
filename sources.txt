@@ -1,2 +1,2 @@
-# One web-subscription URL per line. This file is the source of truth.
-# Add a URL here to enable it; remove the line to remove it from sources.json too.
+https://free.vpn-from-kirill.workers.dev/
+https://pozor.bond/sub/hds2h7arzixr
