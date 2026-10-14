@@ -7,6 +7,7 @@ from unittest.mock import patch
 
 import main
 from main import extract_configs, make_request_url, Source, proxy_json_payload, convert_proxy_json
+from local_converter import convert_proxy_json_to_urls, is_supported_proxy_json
 
 
 class ExtractConfigsTests(unittest.TestCase):
@@ -55,16 +56,34 @@ class ExtractConfigsTests(unittest.TestCase):
     def test_ignores_unrelated_json(self):
         self.assertIsNone(proxy_json_payload('{"title":"website metadata","items":[{"id":1}]}'))
 
-    def test_converts_json_via_p_kfwl_endpoint(self):
+    def test_converts_singbox_vless_json_locally(self):
         body = json.dumps({"outbounds": [{
-            "type": "vless", "tag": "node", "server": "example.org", "server_port": 443,
+            "type": "vless", "tag": "node test", "server": "example.org", "server_port": 443,
             "uuid": "00000000-0000-0000-0000-000000000000",
+            "tls": {"enabled": True, "server_name": "cdn.example.org", "utls": {"enabled": True, "fingerprint": "chrome"}},
+            "transport": {"type": "ws", "path": "/edge", "headers": {"Host": "cdn.example.org"}},
+        }]})
+        source = Source(name="test", url="https://sub.example/json")
+        with patch("main.requests.post", side_effect=AssertionError("should not call a third-party converter")):
+            converted = convert_proxy_json(body, source, {"convert_json": True})
+        self.assertIsNotNone(converted)
+        self.assertIn("vless://00000000-0000-0000-0000-000000000000@example.org:443?", converted)
+        self.assertIn("security=tls", converted)
+        self.assertIn("sni=cdn.example.org", converted)
+        self.assertIn("type=ws", converted)
+        self.assertIn("path=%2Fedge", converted)
+        self.assertIn("#node%20test", converted)
+
+    def test_fetch_source_uses_local_json_converter_without_posting_to_external_service(self):
+        body = json.dumps({"outbounds": [{
+            "type": "vless", "tag": "local", "server": "example.org", "server_port": 443,
+            "uuid": "00000000-0000-0000-0000-000000000000"
         }]})
 
         class FakeResponse:
             status_code = 200
             encoding = "utf-8"
-            headers = {"Content-Type": "text/plain"}
+            headers = {"Content-Type": "application/json"}
 
             def __enter__(self):
                 return self
@@ -76,14 +95,87 @@ class ExtractConfigsTests(unittest.TestCase):
                 return None
 
             def iter_content(self, chunk_size=65536):
-                yield b"vless://00000000-0000-0000-0000-000000000000@example.org:443?encryption=none#node\n"
+                yield body.encode()
 
-        with patch("main.requests.post", return_value=FakeResponse()) as mocked_post:
-            converted = convert_proxy_json(body, Source(name="test", url="https://sub.example/json"), {"convert_json": True, "retries": 0})
+        source = Source(name="json-test", url="https://source.example/json", retries=0)
+        with patch("main.requests.get", return_value=FakeResponse()), patch(
+            "main.requests.post", side_effect=AssertionError("external JSON converter must not be called")
+        ):
+            configs = main.fetch_source(source, {"convert_json": True, "decode_base64": True, "max_body_bytes": 100000})
+        self.assertEqual(len(configs), 1)
+        self.assertTrue(configs[0].startswith("vless://"))
 
-        self.assertIn("vless://", converted)
-        self.assertEqual(mocked_post.call_args.args[0], "https://p.kfwl.lol/json")
-        self.assertEqual(mocked_post.call_args.kwargs["headers"]["Accept"], "text/plain")
+    def test_converts_xray_vless_reality_json_locally(self):
+        body = json.dumps({"outbounds": [{
+            "protocol": "vless", "tag": "reality-node",
+            "settings": {"vnext": [{"address": "example.org", "port": 443, "users": [{
+                "id": "00000000-0000-0000-0000-000000000000", "encryption": "none", "flow": "xtls-rprx-vision"
+            }]}]},
+            "streamSettings": {"network": "tcp", "security": "reality", "realitySettings": {
+                "serverName": "www.example.org", "fingerprint": "chrome", "publicKey": "public-key", "shortId": "a1b2", "spiderX": "/"
+            }}
+        }]})
+        converted = convert_proxy_json_to_urls(body)
+        self.assertEqual(len(converted), 1)
+        self.assertTrue(converted[0].startswith("vless://"))
+        self.assertIn("security=reality", converted[0])
+        self.assertIn("pbk=public-key", converted[0])
+        self.assertIn("sid=a1b2", converted[0])
+        self.assertIn("flow=xtls-rprx-vision", converted[0])
+
+    def test_converts_xray_vmess_to_base64_json(self):
+        body = json.dumps({"outbounds": [{
+            "protocol": "vmess", "tag": "vmess node",
+            "settings": {"vnext": [{"address": "example.org", "port": 8443, "users": [{"id": "abc", "alterId": 0, "security": "auto"}]}]},
+            "streamSettings": {"network": "ws", "security": "tls", "tlsSettings": {"serverName": "example.org"}, "wsSettings": {"path": "/ws", "headers": {"Host": "cdn.example.org"}}}
+        }]})
+        converted = convert_proxy_json_to_urls(body)
+        self.assertEqual(len(converted), 1)
+        self.assertTrue(converted[0].startswith("vmess://"))
+        encoded = converted[0][len("vmess://"):]
+        vmess = json.loads(base64.b64decode(encoded).decode())
+        self.assertEqual(vmess["add"], "example.org")
+        self.assertEqual(vmess["net"], "ws")
+        self.assertEqual(vmess["path"], "/ws")
+        self.assertEqual(vmess["tls"], "tls")
+
+    def test_converts_shadowsocks_and_skips_direct_outbound(self):
+        body = json.dumps({"outbounds": [
+            {"type": "shadowsocks", "tag": "ss-node", "server": "ss.example", "server_port": 8388, "method": "aes-128-gcm", "password": "secret"},
+            {"type": "direct", "tag": "direct"},
+            {"type": "block", "tag": "block"}
+        ]})
+        converted = convert_proxy_json_to_urls(body)
+        self.assertEqual(len(converted), 1)
+        self.assertTrue(converted[0].startswith("ss://"))
+        self.assertIn("@ss.example:8388#ss-node", converted[0])
+
+    def test_http_proxy_generated_from_json_is_kept_even_though_html_links_are_filtered(self):
+        body = json.dumps({"outbounds": [{
+            "type": "http", "tag": "http node", "server": "proxy.example", "server_port": 8080,
+            "username": "alice", "password": "p@ss word"
+        }]})
+        converted = convert_proxy_json_to_urls(body)
+        self.assertEqual(len(converted), 1)
+        self.assertTrue(converted[0].startswith("http://alice:p%40ss%20word@proxy.example:8080#http%20node"))
+
+    def test_converts_singbox_hysteria2(self):
+        body = json.dumps({"outbounds": [{
+            "type": "hysteria2", "tag": "hy2", "server": "hy.example", "server_port": 443,
+            "password": "secret", "tls": {"enabled": True, "server_name": "hy.example", "alpn": ["h3"]},
+            "obfs": {"type": "salamander", "password": "obfs-secret"}
+        }]})
+        converted = convert_proxy_json_to_urls(body)
+        self.assertEqual(len(converted), 1)
+        self.assertTrue(converted[0].startswith("hysteria2://secret@hy.example:443?"))
+        self.assertIn("obfs=salamander", converted[0])
+        self.assertIn("obfs-password=obfs-secret", converted[0])
+
+    def test_supports_json_wrapped_as_string_and_ignores_unrelated_json(self):
+        inner = json.dumps({"type": "trojan", "tag": "tr", "server": "example.org", "server_port": 443, "password": "secret", "tls": {"enabled": True, "server_name": "example.org"}})
+        self.assertTrue(is_supported_proxy_json(json.dumps({"data": inner})))
+        self.assertEqual(len(convert_proxy_json_to_urls(json.dumps({"data": inner}))), 1)
+        self.assertFalse(is_supported_proxy_json('{"title":"website metadata","items":[{"id":1}]}'))
 
     def test_sync_json_adds_new_url_and_removes_deleted_url(self):
         with tempfile.TemporaryDirectory() as tmp:

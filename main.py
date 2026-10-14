@@ -15,6 +15,8 @@ from urllib.parse import quote, urlparse
 
 import requests
 
+from local_converter import convert_proxy_json_to_urls, is_supported_proxy_json
+
 ROOT = Path(__file__).resolve().parent
 CONFIG_PATH = ROOT / "sources.json"
 SOURCES_TXT = ROOT / "sources.txt"
@@ -125,7 +127,6 @@ def load_sources() -> tuple[list[Source], dict[str, Any]]:
         "max_body_bytes": MAX_BODY_BYTES,
         "decode_base64": True,
         "convert_json": True,
-        "json_converter_url": "https://p.kfwl.lol",
     }
 
     if CONFIG_PATH.exists():
@@ -309,52 +310,17 @@ def _read_response_limited(response: requests.Response, max_bytes: int) -> str:
 
 
 def convert_proxy_json(body: str, source: Source, defaults: dict[str, Any]) -> str | None:
-    """Convert native Xray/sing-box JSON into share URLs using p.kfwl.lol's documented /json API.
-
-    JSON proxy credentials are sent to that third-party converter. Use only when that is acceptable
-    for the source; callers can disable conversion in defaults or set a different converter URL.
-    """
+    """Convert supported Xray/sing-box JSON to share links locally; no external service is used."""
     if not bool(defaults.get("convert_json", True)):
         return None
-    payload = proxy_json_payload(body)
-    if payload is None:
+    if not is_supported_proxy_json(body):
         return None
-
-    converter_base = str(defaults.get("json_converter_url", source.proxy_base)).rstrip("/")
-    endpoint = f"{converter_base}/json"
-    payload_text = json.dumps(payload, ensure_ascii=False, separators=(",", ":"))
-    max_bytes = int(defaults.get("max_body_bytes", MAX_BODY_BYTES))
-    headers = {
-        "User-Agent": DEFAULT_UA,
-        "Content-Type": "application/json",
-        "Accept": "text/plain",
-    }
-    last_error: Exception | None = None
-    for attempt in range(source.retries + 1):
-        try:
-            with requests.post(
-                endpoint,
-                data=payload_text.encode("utf-8"),
-                headers=headers,
-                timeout=source.timeout_seconds,
-                allow_redirects=True,
-                stream=True,
-            ) as response:
-                response.raise_for_status()
-                converted = _read_response_limited(response, max_bytes)
-                print(f"[INFO] {source.name}: detected Xray/sing-box JSON; converted via {urlparse(converter_base).hostname}/json")
-                return converted
-        except Exception as exc:
-            last_error = exc
-            print(
-                f"[WARN] {source.name}: JSON-to-URL conversion attempt {attempt + 1}/"
-                f"{source.retries + 1} failed: {type(exc).__name__}: {exc}"
-            )
-            if attempt < source.retries:
-                time.sleep(min(2 ** attempt, 5))
-    if last_error:
+    converted = convert_proxy_json_to_urls(body)
+    if not converted:
+        print(f"[WARN] {source.name}: detected proxy JSON, but no supported outbound could be converted")
         return None
-    return None
+    print(f"[INFO] {source.name}: locally converted JSON to {len(converted)} proxy URLs (no third-party converter)")
+    return "\n".join(converted)
 
 
 def fetch_source(source: Source, defaults: dict[str, Any]) -> list[str]:
@@ -373,13 +339,20 @@ def fetch_source(source: Source, defaults: dict[str, Any]) -> list[str]:
                 response.raise_for_status()
                 body = _read_response_limited(response, int(defaults.get("max_body_bytes", MAX_BODY_BYTES)))
                 content_type = response.headers.get("Content-Type", "unknown").split(";")[0]
-                configs = extract_configs(body, decode_base64=bool(defaults.get("decode_base64", True)))
+                decode_base64 = bool(defaults.get("decode_base64", True))
+                configs = extract_configs(body, decode_base64=decode_base64)
                 converted_json = False
                 if not configs:
-                    converted_body = convert_proxy_json(body, source, defaults)
-                    if converted_body is not None:
-                        configs = extract_configs(converted_body, decode_base64=False)
-                        converted_json = True
+                    # A subscription may wrap the JSON in Base64; try plausible decoded text variants too.
+                    for candidate in candidate_texts(body, decode_base64=decode_base64):
+                        converted_body = convert_proxy_json(candidate, source, defaults)
+                        if converted_body is not None:
+                            # This text is produced by our own converter, not read from a web page;
+                            # accept each emitted URI as-is, including legitimate http:// proxy links.
+                            configs = [line.strip() for line in converted_body.splitlines() if line.strip()]
+                            converted_json = bool(configs)
+                            if configs:
+                                break
                 conversion_note = ", JSON converted" if converted_json else ""
                 print(f"[INFO] {source.name} ({safe_host(source.url)}): HTTP {response.status_code}, {content_type}, {len(configs)} configs{conversion_note}")
                 if not configs and ("<html" in body[:2000].lower() or "<!doctype html" in body[:2000].lower()):
