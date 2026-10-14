@@ -4,26 +4,9 @@
     "retries": 2,
     "decode_base64": true,
     "max_body_bytes": 8388608,
-    "user_agent": "Happ/3.0.0"
+    "user_agent": "Happ/3.0.0",
+    "convert_json": true,
+    "json_converter_url": "https://p.kfwl.lol"
   },
-  "sources": [
-    {
-      "name": "free.vpn-from-kirill.workers.dev",
-      "url": "https://free.vpn-from-kirill.workers.dev/",
-      "mode": "direct",
-      "user_agent": "Happ/3.0.0",
-      "headers": {},
-      "timeout_seconds": 30,
-      "retries": 2
-    },
-    {
-      "name": "pozor.bond",
-      "url": "https://pozor.bond/sub/hds2h7arzixr",
-      "mode": "direct",
-      "user_agent": "Happ/3.0.0",
-      "headers": {},
-      "timeout_seconds": 30,
-      "retries": 2
-    }
-  ]
+  "sources": []
 }

@@ -22,7 +22,7 @@ OUTPUT_PATH = ROOT / "configs.txt"
 
 # Match proxy URI schemes only; generic HTTP(S) URLs are often website links, not proxy configs.
 PROXY_RE = re.compile(
-    r"(?i)(?:vless|vmess|trojan|ss|ssr|socks|socks5|socks5h|socks4|hysteria2|hy2|tuic|wireguard|wg)://[^\s\"'<>]+"
+    r"(?i)(?:vless|vmess|trojan|ss|ssr|socks|socks5|socks5h|socks4|hysteria|hysteria2|hy2|tuic|anytls|wireguard|wg)://[^\s\"'<>]+"
 )
 DEFAULT_UA = "Mozilla/5.0 (compatible; LIKVID-Web-Parser/1.0; +https://github.com/cheesyx-rudy/web-parser)"
 MAX_BODY_BYTES = 8 * 1024 * 1024
@@ -124,6 +124,8 @@ def load_sources() -> tuple[list[Source], dict[str, Any]]:
         "user_agent": "Happ/3.0.0",
         "max_body_bytes": MAX_BODY_BYTES,
         "decode_base64": True,
+        "convert_json": True,
+        "json_converter_url": "https://p.kfwl.lol",
     }
 
     if CONFIG_PATH.exists():
@@ -236,6 +238,125 @@ def extract_configs(body: str, decode_base64: bool = True) -> list[str]:
     return found
 
 
+SUPPORTED_JSON_PROTOCOLS = {
+    "vless", "vmess", "trojan", "shadowsocks", "ss", "hysteria", "hysteria2",
+    "hy2", "tuic", "anytls",
+}
+JSON_WRAPPER_KEYS = ("config", "data", "configs", "items", "nodes", "proxies", "result")
+
+
+def _is_proxy_outbound(value: Any) -> bool:
+    """Recognize a single Xray or sing-box proxy outbound without matching direct/block nodes."""
+    if not isinstance(value, dict):
+        return False
+    protocol = str(value.get("protocol") or value.get("type") or "").strip().lower()
+    if protocol not in SUPPORTED_JSON_PROTOCOLS:
+        return False
+    # Sing-box outbound records use server/server_port; Xray records use settings/streamSettings.
+    if "type" in value:
+        return bool(value.get("server") and (value.get("server_port") or value.get("port")))
+    return isinstance(value.get("settings"), dict)
+
+
+def _looks_like_proxy_json(value: Any) -> bool:
+    """Check Xray/sing-box full configs, proxy outbound objects, and arrays of either."""
+    if isinstance(value, list):
+        return any(_looks_like_proxy_json(item) for item in value)
+    if not isinstance(value, dict):
+        return False
+    if _is_proxy_outbound(value):
+        return True
+    outbounds = value.get("outbounds")
+    if isinstance(outbounds, list) and any(_is_proxy_outbound(item) for item in outbounds):
+        return True
+    return any(_looks_like_proxy_json(value.get(key)) for key in JSON_WRAPPER_KEYS if key in value)
+
+
+def proxy_json_payload(body: str) -> Any | None:
+    """Return a supported proxy JSON payload, unwrapping common API response wrappers."""
+    try:
+        parsed = json.loads(body.lstrip("\ufeff").strip())
+    except (json.JSONDecodeError, TypeError):
+        return None
+    if not _looks_like_proxy_json(parsed):
+        return None
+
+    # The p.kfwl converter accepts full Xray/sing-box configs and arrays of outbound/config objects.
+    if isinstance(parsed, (dict, list)):
+        if isinstance(parsed, dict) and not (
+            isinstance(parsed.get("outbounds"), list) and any(_is_proxy_outbound(x) for x in parsed["outbounds"])
+        ) and not _is_proxy_outbound(parsed):
+            for key in JSON_WRAPPER_KEYS:
+                candidate = parsed.get(key)
+                if _looks_like_proxy_json(candidate):
+                    return candidate
+        return parsed
+    return None
+
+
+def _read_response_limited(response: requests.Response, max_bytes: int) -> str:
+    chunks: list[bytes] = []
+    size = 0
+    for chunk in response.iter_content(chunk_size=65536):
+        if not chunk:
+            continue
+        size += len(chunk)
+        if size > max_bytes:
+            raise ValueError(f"response exceeds {max_bytes} bytes")
+        chunks.append(chunk)
+    encoding = response.encoding or "utf-8"
+    return b"".join(chunks).decode(encoding, errors="replace")
+
+
+def convert_proxy_json(body: str, source: Source, defaults: dict[str, Any]) -> str | None:
+    """Convert native Xray/sing-box JSON into share URLs using p.kfwl.lol's documented /json API.
+
+    JSON proxy credentials are sent to that third-party converter. Use only when that is acceptable
+    for the source; callers can disable conversion in defaults or set a different converter URL.
+    """
+    if not bool(defaults.get("convert_json", True)):
+        return None
+    payload = proxy_json_payload(body)
+    if payload is None:
+        return None
+
+    converter_base = str(defaults.get("json_converter_url", source.proxy_base)).rstrip("/")
+    endpoint = f"{converter_base}/json"
+    payload_text = json.dumps(payload, ensure_ascii=False, separators=(",", ":"))
+    max_bytes = int(defaults.get("max_body_bytes", MAX_BODY_BYTES))
+    headers = {
+        "User-Agent": DEFAULT_UA,
+        "Content-Type": "application/json",
+        "Accept": "text/plain",
+    }
+    last_error: Exception | None = None
+    for attempt in range(source.retries + 1):
+        try:
+            with requests.post(
+                endpoint,
+                data=payload_text.encode("utf-8"),
+                headers=headers,
+                timeout=source.timeout_seconds,
+                allow_redirects=True,
+                stream=True,
+            ) as response:
+                response.raise_for_status()
+                converted = _read_response_limited(response, max_bytes)
+                print(f"[INFO] {source.name}: detected Xray/sing-box JSON; converted via {urlparse(converter_base).hostname}/json")
+                return converted
+        except Exception as exc:
+            last_error = exc
+            print(
+                f"[WARN] {source.name}: JSON-to-URL conversion attempt {attempt + 1}/"
+                f"{source.retries + 1} failed: {type(exc).__name__}: {exc}"
+            )
+            if attempt < source.retries:
+                time.sleep(min(2 ** attempt, 5))
+    if last_error:
+        return None
+    return None
+
+
 def fetch_source(source: Source, defaults: dict[str, Any]) -> list[str]:
     request_url = make_request_url(source)
     parsed = urlparse(request_url)
@@ -250,20 +371,17 @@ def fetch_source(source: Source, defaults: dict[str, Any]) -> list[str]:
         try:
             with requests.get(request_url, headers=headers, timeout=source.timeout_seconds, allow_redirects=True, stream=True) as response:
                 response.raise_for_status()
-                chunks: list[bytes] = []
-                size = 0
-                for chunk in response.iter_content(chunk_size=65536):
-                    if not chunk:
-                        continue
-                    size += len(chunk)
-                    if size > int(defaults.get("max_body_bytes", MAX_BODY_BYTES)):
-                        raise ValueError(f"response exceeds {defaults.get('max_body_bytes', MAX_BODY_BYTES)} bytes")
-                    chunks.append(chunk)
-                encoding = response.encoding or "utf-8"
-                body = b"".join(chunks).decode(encoding, errors="replace")
+                body = _read_response_limited(response, int(defaults.get("max_body_bytes", MAX_BODY_BYTES)))
                 content_type = response.headers.get("Content-Type", "unknown").split(";")[0]
                 configs = extract_configs(body, decode_base64=bool(defaults.get("decode_base64", True)))
-                print(f"[INFO] {source.name} ({safe_host(source.url)}): HTTP {response.status_code}, {content_type}, {len(configs)} configs")
+                converted_json = False
+                if not configs:
+                    converted_body = convert_proxy_json(body, source, defaults)
+                    if converted_body is not None:
+                        configs = extract_configs(converted_body, decode_base64=False)
+                        converted_json = True
+                conversion_note = ", JSON converted" if converted_json else ""
+                print(f"[INFO] {source.name} ({safe_host(source.url)}): HTTP {response.status_code}, {content_type}, {len(configs)} configs{conversion_note}")
                 if not configs and ("<html" in body[:2000].lower() or "<!doctype html" in body[:2000].lower()):
                     print(f"[WARN] {source.name}: got HTML but no proxy links. The page may be only a frontend; configure its actual subscription/API endpoint.")
                 elif not configs:
@@ -284,7 +402,7 @@ def main() -> int:
     print("[START] Web subscription parser")
     sources, defaults = load_sources()
     if not sources:
-        print("[WARN] No sources configured. Add URLs to sources.json or sources.txt.")
+        print("[WARN] No sources configured. Add URLs to sources.txt.")
         OUTPUT_PATH.write_text("", encoding="utf-8")
         return 0
 

@@ -6,7 +6,7 @@ from pathlib import Path
 from unittest.mock import patch
 
 import main
-from main import extract_configs, make_request_url, Source
+from main import extract_configs, make_request_url, Source, proxy_json_payload, convert_proxy_json
 
 
 class ExtractConfigsTests(unittest.TestCase):
@@ -31,6 +31,59 @@ class ExtractConfigsTests(unittest.TestCase):
         source = Source(name="test", url="https://sub.example/abc", mode="p_kfwl", user_agent="Happ", os_name="android", hwid="abc123")
         url = make_request_url(source)
         self.assertTrue(url.startswith("https://p.kfwl.lol/ua=Happ/os=android/h=abc123/url/https://sub.example/abc"))
+
+    def test_detects_xray_json_full_config(self):
+        body = json.dumps({
+            "outbounds": [{
+                "protocol": "vless",
+                "tag": "test-node",
+                "settings": {"vnext": [{"address": "example.org", "port": 443, "users": [{"id": "00000000-0000-0000-0000-000000000000"}]}]},
+                "streamSettings": {"network": "tcp", "security": "tls"},
+            }]
+        })
+        self.assertIsNotNone(proxy_json_payload(body))
+
+    def test_detects_sing_box_json_full_config(self):
+        body = json.dumps({
+            "outbounds": [{
+                "type": "vless", "tag": "test-node", "server": "example.org", "server_port": 443,
+                "uuid": "00000000-0000-0000-0000-000000000000",
+            }, {"type": "direct", "tag": "direct"}]
+        })
+        self.assertIsNotNone(proxy_json_payload(body))
+
+    def test_ignores_unrelated_json(self):
+        self.assertIsNone(proxy_json_payload('{"title":"website metadata","items":[{"id":1}]}'))
+
+    def test_converts_json_via_p_kfwl_endpoint(self):
+        body = json.dumps({"outbounds": [{
+            "type": "vless", "tag": "node", "server": "example.org", "server_port": 443,
+            "uuid": "00000000-0000-0000-0000-000000000000",
+        }]})
+
+        class FakeResponse:
+            status_code = 200
+            encoding = "utf-8"
+            headers = {"Content-Type": "text/plain"}
+
+            def __enter__(self):
+                return self
+
+            def __exit__(self, *args):
+                return False
+
+            def raise_for_status(self):
+                return None
+
+            def iter_content(self, chunk_size=65536):
+                yield b"vless://00000000-0000-0000-0000-000000000000@example.org:443?encryption=none#node\n"
+
+        with patch("main.requests.post", return_value=FakeResponse()) as mocked_post:
+            converted = convert_proxy_json(body, Source(name="test", url="https://sub.example/json"), {"convert_json": True, "retries": 0})
+
+        self.assertIn("vless://", converted)
+        self.assertEqual(mocked_post.call_args.args[0], "https://p.kfwl.lol/json")
+        self.assertEqual(mocked_post.call_args.kwargs["headers"]["Accept"], "text/plain")
 
     def test_sync_json_adds_new_url_and_removes_deleted_url(self):
         with tempfile.TemporaryDirectory() as tmp:
