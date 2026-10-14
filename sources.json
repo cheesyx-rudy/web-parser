@@ -6,5 +6,24 @@
     "max_body_bytes": 8388608,
     "user_agent": "Happ/3.0.0"
   },
-  "sources": []
+  "sources": [
+    {
+      "name": "free.vpn-from-kirill.workers.dev",
+      "url": "https://free.vpn-from-kirill.workers.dev/",
+      "mode": "direct",
+      "user_agent": "Happ/3.0.0",
+      "headers": {},
+      "timeout_seconds": 30,
+      "retries": 2
+    },
+    {
+      "name": "pozor.bond",
+      "url": "https://pozor.bond/sub/hds2h7arzixr",
+      "mode": "direct",
+      "user_agent": "Happ/3.0.0",
+      "headers": {},
+      "timeout_seconds": 30,
+      "retries": 2
+    }
+  ]
 }
