@@ -1,0 +1,2 @@
+# One direct subscription/API URL per line.
+# For per-source User-Agent, headers, HWID, or p.kfwl.lol settings, configure sources.json instead.
