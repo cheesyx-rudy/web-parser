@@ -20,9 +20,9 @@ CONFIG_PATH = ROOT / "sources.json"
 SOURCES_TXT = ROOT / "sources.txt"
 OUTPUT_PATH = ROOT / "configs.txt"
 
-# Deliberately match complete proxy URI tokens, while stopping before HTML/YAML punctuation.
+# Match proxy URI schemes only; generic HTTP(S) URLs are often website links, not proxy configs.
 PROXY_RE = re.compile(
-    r"(?i)(?:vless|vmess|trojan|ss|ssr|socks|socks5|socks5h|socks4|http|https|hysteria2|hy2|tuic|wireguard|wg)://[^\s\"'<>]+"
+    r"(?i)(?:vless|vmess|trojan|ss|ssr|socks|socks5|socks5h|socks4|hysteria2|hy2|tuic|wireguard|wg)://[^\s\"'<>]+"
 )
 DEFAULT_UA = "Mozilla/5.0 (compatible; LIKVID-Web-Parser/1.0; +https://github.com/cheesyx-rudy/web-parser)"
 MAX_BODY_BYTES = 8 * 1024 * 1024

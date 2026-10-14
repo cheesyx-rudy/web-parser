@@ -47,3 +47,8 @@ python main.py
 ```
 
 В логах не печатаются полные URL с query-токенами или авторизационные заголовки.
+
+
+### Filtering ordinary links
+
+The parser extracts recognized proxy URI schemes (such as `vless://`, `vmess://`, `trojan://`, `ss://`, and supported SOCKS/Hysteria/TUIC forms). Ordinary `http://` and `https://` links are intentionally ignored, so website, Telegram, support, and channel links are not included in `configs.txt`.

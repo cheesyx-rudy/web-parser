@@ -14,6 +14,10 @@ class ExtractConfigsTests(unittest.TestCase):
         body = "vless://one#A\nvmess://two#B\ntrojan://three#C"
         self.assertEqual(extract_configs(body), ["vless://one#A", "vmess://two#B", "trojan://three#C"])
 
+    def test_ignores_ordinary_website_links(self):
+        body = "vless://proxy-one\nhttps://t.me/quorvpn\nhttps://t.me/QuorVPN\nvless://proxy-two"
+        self.assertEqual(extract_configs(body), ["vless://proxy-one", "vless://proxy-two"])
+
     def test_deduplicates(self):
         body = "vless://example\nvless://example"
         self.assertEqual(extract_configs(body), ["vless://example"])
