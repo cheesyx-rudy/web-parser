@@ -10,8 +10,8 @@
   },
   "sources": [
     {
-      "name": "free.vpn-from-kirill.workers.dev",
-      "url": "https://free.vpn-from-kirill.workers.dev/",
+      "name": "gidroksi.fun",
+      "url": "https://gidroksi.fun/svagoff_unofficial/SwagVpn",
       "mode": "direct",
       "user_agent": "Happ/3.0.0",
       "headers": {},
@@ -19,8 +19,8 @@
       "retries": 2
     },
     {
-      "name": "pozor.bond",
-      "url": "https://pozor.bond/sub/hds2h7arzixr",
+      "name": "gidroksi.fun",
+      "url": "https://gidroksi.fun/dhdgshsgdhdh/VFG",
       "mode": "direct",
       "user_agent": "Happ/3.0.0",
       "headers": {},
