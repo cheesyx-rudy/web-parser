@@ -1,6 +1,3 @@
-vless://0e486591-739d-4cad-9e6d-5bea433a7d7e@video-balancer.7.8.advantage-a.cdnnow.xyz:443?encryption=mlkem768x25519plus.native.0rtt.fHWby_qZOQzmHk9oEusuq8lpf2qm9DIUagaOowqfiGs&security=reality&sni=developer.fastly.com&fp=firefox&pbk=AqMi_FZTRgZrKRMVMsT1QUYqD_yea049GDKq5Z7vp2Y&sid=0123456789abcdef&spx=/&type=tcp&headerType=none#🇪🇺
-vless://0e486591-739d-4cad-9e6d-5bea433a7d7e@video-balancer.7.8.advantage-a.cdnnow.xyz:443?encryption=mlkem768x25519plus.native.0rtt.2U5TuD3eUnuqOEzxekO9fWn59xO1gnT1zbcJAavfiEw&security=reality&sni=developer.fastly.com&fp=firefox&pbk=lbEFXYMJ1EYyBsUn4_Fbn_baKzNDfxBde8TeHEGEolU&sid=564b0378baabfdb5&spx=/&type=grpc&mode=multi&authority=&serviceName=ServiceNetworkVideoUpdater.aska.V2#🇪🇺
-hysteria2://LixInhAbZAqOczwkgoPsRI0Wba5HXBGh@video-balancer.7.8.advantage-a.cdnnow.xyz:443/?sni=video-balancer.7.8.advantage-a.cdnnow.xyz&fp=chrome#🇪🇺
 vless://9ba53795-4356-40ab-8067-76ec2ae2a3d8@santehdv.site:443?encryption=none&security=tls&sni=santehdv.site&alpn=http%2F1.1&fp=edge&type=ws&path=%2Fmedia%2Fstream%2FqUWu2oaFgxAw&headers=%7B%0A%20%20%22Host%22%3A%20%22%22%0A%7D#🇨🇾
 vless://9ba53795-4356-40ab-8067-76ec2ae2a3d8@slivdom-spb.site:443?encryption=none&security=tls&sni=slivdom-spb.site&alpn=http%2F1.1&fp=edge&type=ws&path=%2Fmedia%2Fstream%2FdBglRwZveCyD&headers=%7B%0A%20%20%22Host%22%3A%20%22%22%0A%7D#🇨🇾
 vless://9ba53795-4356-40ab-8067-76ec2ae2a3d8@santehdv.site:443?encryption=none&security=tls&sni=santehdv.site&alpn=http%2F1.1&fp=edge&type=ws&path=media%2Fstream%2FE2QlYgrvniT_&headers=%7B%0A%20%20%22Host%22%3A%20%22%22%0A%7D#🇨🇾
@@ -34,3 +31,9 @@ vless://9c5ad05d-d807-002e-bf48-cfad48af6dec@84.38.187.134:443?flow=&type=xhttp&
 vless://9c5ad05d-d807-0029-bf48-cfad48af6dec@95.143.188.10:443?flow=&type=xhttp&host=&path=/repository&mode=packet-up&extra={
 vless://9c5ad05d-d807-0037-bf48-cfad48af6dec@95.143.188.10:443?flow=&type=xhttp&host=&path=/repository&mode=packet-up&extra={
 vless://9c5ad05d-d807-002e-bf48-cfad48af6dec@95.143.188.10:443?flow=&type=xhttp&host=&path=/repository&mode=packet-up&extra={
+vless://fa34ac6c-410a-42bb-8f2d-9476a4e4b912@video-balancer.7.8.advantage-a.cdnnow.xyz:443?encryption=none&type=grpc&security=reality&sni=developer.fastly.com&pbk=lbEFXYMJ1EYyBsUn4_Fbn_baKzNDfxBde8TeHEGEolU&sid=e7e0b5a1fd6f5472&fp=firefox&serviceName=ServiceNetworkVideoUpdater.aska.V2#🇪🇺
+vless://fa34ac6c-410a-42bb-8f2d-9476a4e4b912@video-balancer.7.8.advantage-a.cdnnow.xyz:443?encryption=none&type=tcp&security=reality&sni=developer.fastly.com&pbk=AqMi_FZTRgZrKRMVMsT1QUYqD_yea049GDKq5Z7vp2Y&sid=2f294d1212af4cee&fp=firefox#🇪🇺
+vless://fa34ac6c-410a-42bb-8f2d-9476a4e4b912@b-balance.avantage.7.s.cdnnow.xyz:443?encryption=none&type=xhttp&security=tls&sni=b-balance.avantage.7.s.cdnnow.xyz&path=%2Fstatic%2Fstream%2Fvalues%2Fsegment_0xf6672ee%2F&host=b-balance.avantage.7.s.cdnnow.xyz#🇪🇺
+vless://fa34ac6c-410a-42bb-8f2d-9476a4e4b912@snap.packages.127-0-0-1.online:443?encryption=none&type=httpupgrade&security=tls&flow=xtls-rprx-vision&sni=snap.packages.127-0-0-1.online#🇪🇺
+hy2://XI5CJGoEWqxxkbmwRpLZrDflUgQAfghg@video-balancer.7.8.advantage-a.cdnnow.xyz:443?sni=video-balancer.7.8.advantage-a.cdnnow.xyz#🇪🇺
+hy2://XI5CJGoEWqxxkbmwRpLZrDflUgQAfghg@b-balance.avantage.7.s.cdnnow.xyz:443?sni=b-balance.avantage.7.s.cdnnow.xyz#🇪🇺
